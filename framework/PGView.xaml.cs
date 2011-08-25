@@ -260,7 +260,7 @@ namespace WP7GapClassLib
             //this.GapBrowser.InvokeScript("eval", new string[] {callBackScript });
 
 
-            /// But we temporary use this version because C#<->JS bridge is on fully ready
+            /// But we temporary use this version because C#<->JS bridge is not fully ready
             if (result.IsSuccess)
             {
                 this.GapBrowser.InvokeScript("commandResult", new string[] { callbackId, result.ToJSONString() });

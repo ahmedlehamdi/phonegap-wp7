@@ -12,6 +12,8 @@ using Microsoft.Phone.Tasks;
 using System.Runtime.Serialization;
 using System.IO;
 using System.IO.IsolatedStorage;
+using System.Windows.Media.Imaging;
+using Microsoft.Phone;
 
 namespace WP7GapClassLib.PhoneGap.Commands
 {
@@ -68,7 +70,7 @@ namespace WP7GapClassLib.PhoneGap.Commands
         /// <summary>
         /// Folder to store captured images
         /// </summary>
-        private string isoFolder = "CapturedImagesCache";
+        private const string isoFolder = "CapturedImagesCache";
 
         /// <summary>
         /// Represents captureImage action options.
@@ -79,24 +81,55 @@ namespace WP7GapClassLib.PhoneGap.Commands
             /// <summary>
             /// Source to getPicture from.
             /// </summary>
-            [DataMember]
+            [DataMember(IsRequired = false, Name = "sourceType")]
             public int PictureSourceType { get; set; }
         
             /// <summary>
             /// Format of image that returned from getPicture.
             /// </summary>
-            [DataMember]
+            [DataMember(IsRequired = false, Name = "destinationType")]
             public int DestinationType { get; set; }
 
             /// <summary>
-            /// Encoding of image returned from getPicture.
+            /// Quality of saved image
             /// </summary>
-            [DataMember]                
-            public int EncodingType { get; set; }
+            [DataMember(IsRequired = false, Name = "quality")]
+            public int Quality { get; set; }
 
-            public static CameraOptions Default 
+
+            /// <summary>
+            /// Height in pixels to scale image
+            /// </summary>
+            [DataMember(IsRequired = false, Name = "targetHeight")]
+            public int TargetHeight { get; set; }
+            
+            /// <summary>
+            /// Width in pixels to scale image
+            /// </summary>
+            [DataMember(IsRequired = false, Name = "targetWidth")]
+            public int TargetWidth { get; set; }
+
+            /// <summary>
+            /// Creates options object with default parameters
+            /// </summary>
+            public CameraOptions()
             {
-                get { return new CameraOptions() { PictureSourceType = CAMERA, DestinationType = DATA_URL, EncodingType = JPEG}; }
+                this.SetDefaultValues(new StreamingContext());
+            }
+
+            /// <summary>
+            /// Initializes default values for class fields.
+            /// Implemented in separate method because default constructor is not invoked during deserialization.
+            /// </summary>
+            /// <param name="context"></param>
+            [OnDeserializing()]
+            public void SetDefaultValues(StreamingContext context)
+            {
+                PictureSourceType = 1;
+                DestinationType = 0;
+                Quality = 100;
+                TargetHeight = 0;
+                TargetWidth = 0;
             }
 
         }
@@ -121,8 +154,7 @@ namespace WP7GapClassLib.PhoneGap.Commands
             try
             {
                 this.cameraOptions = String.IsNullOrEmpty(options) ?
-                        CameraOptions.Default : JSON.JsonHelper.Deserialize<CameraOptions>(options);
-
+                        new CameraOptions() : JSON.JsonHelper.Deserialize<CameraOptions>(options);
             }
             catch (Exception ex)
             {
@@ -168,34 +200,24 @@ namespace WP7GapClassLib.PhoneGap.Commands
                 case TaskResult.OK:
                     try
                     {
-                        string imageData = string.Empty;
+                        string imagePathOrContent = string.Empty;
                         
-                        if(cameraOptions.PictureSourceType == CAMERA)
+                        if (cameraOptions.DestinationType == FILE_URI)
+                            {
+                            WriteableBitmap image = PictureDecoder.DecodeJpeg(e.ChosenPhoto);
+                            imagePathOrContent = this.SaveImageToLocalStorage(image, Path.GetFileName(e.OriginalFileName));
+                            }
+                        else if(cameraOptions.DestinationType == DATA_URL) 
+                            {
+                            imagePathOrContent = this.GetImageContent(e.ChosenPhoto);
+
+                        } else
                         {
-                            if (cameraOptions.DestinationType == DATA_URL)
-                            {
-                                imageData = getBase64(e.ChosenPhoto);
-                            }
-                            else
-                            {
-                                byte[] imageBytes = new byte[e.ChosenPhoto.Length];
-                                e.ChosenPhoto.Read(imageBytes, 0, imageBytes.Length);
-                                imageData = this.SaveImageToLocalStorage(Path.GetFileName(e.OriginalFileName), isoFolder, imageBytes);
-                            }
-                        }
-                        else 
-                        {
-                            if (cameraOptions.DestinationType == DATA_URL)
-                            {
-                                imageData = getBase64(e.ChosenPhoto);
-                            }
-                            else
-                            {
-                                //TODO Set default value or return base64 or something else
-                            }
+                            DispatchCommandResult(new PluginResult(PluginResult.Status.ERROR,"Incorrec option: destinationType"));
+                            return;
                         }
                                                                        
-                        DispatchCommandResult(new PluginResult(PluginResult.Status.OK,imageData));
+                        DispatchCommandResult(new PluginResult(PluginResult.Status.OK,imagePathOrContent));
 
                     }
                     catch (Exception ex)
@@ -216,15 +238,17 @@ namespace WP7GapClassLib.PhoneGap.Commands
 
 
         /// <summary>
-        /// Creates base64 string from binary file
+        /// Returns image content in a form of base64 string
         /// </summary>
-        /// <param name="stream"></param>
-        /// <returns></returns>
-        private string getBase64(Stream stream) {
+        /// <param name="stream">Image stream</param>
+        /// <returns>Base64 representation of the image</returns>
+        private string GetImageContent(Stream stream) 
+        {
             int streamLength = (int)stream.Length;
             byte[] fileData = new byte[streamLength + 1];
             stream.Read(fileData, 0, streamLength);
             stream.Close();
+            
             return Convert.ToBase64String(fileData);
         }
 
@@ -233,29 +257,38 @@ namespace WP7GapClassLib.PhoneGap.Commands
         /// Saves captured image in isolated storage
         /// </summary>
         /// <param name="imageFileName">image file name</param>
-        /// <param name="imageFolder">folder to store images</param>
         /// <returns>Image path</returns>
-        private string SaveImageToLocalStorage(string imageFileName, string imageFolder, byte[] imageBytes)
+        private string SaveImageToLocalStorage(WriteableBitmap image, string imageFileName)
         {
-            if (imageBytes == null)
+            
+            if (image == null)
             {
                 throw new ArgumentNullException("imageBytes");
             }
             try
             {
+                
+                
                 var isoFile = IsolatedStorageFile.GetUserStoreForApplication();
 
-                if (!isoFile.DirectoryExists(imageFolder))
+                if (!isoFile.DirectoryExists(isoFolder))
                 {
-                    isoFile.CreateDirectory(imageFolder);
+                    isoFile.CreateDirectory(isoFolder);
                 }
-                string filePath = System.IO.Path.Combine(imageFolder, imageFileName);
+                string filePath = System.IO.Path.Combine(isoFolder, imageFileName);
 
                 using (var stream = isoFile.CreateFile(filePath))
                 {
-                    stream.Write(imageBytes, 0, imageBytes.Length);
+                    // resize image if Height and Width defined via options 
+                    if (cameraOptions.TargetHeight != 0 && cameraOptions.TargetWidth != 0)
+                    {
+                        image.SaveJpeg(stream, cameraOptions.TargetWidth, cameraOptions.TargetHeight, 0, cameraOptions.Quality);
+                    }
+                    else
+                    {
+                        image.SaveJpeg(stream, image.PixelWidth, image.PixelHeight, 0, cameraOptions.Quality);
+                    }
                 }
-
                 return filePath;
             }
             catch (Exception e)
