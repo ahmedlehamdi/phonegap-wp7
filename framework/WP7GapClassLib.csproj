@@ -56,6 +56,10 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PhoneGap\UI\AudioCaptureTask.cs" />
+    <Compile Include="PhoneGap\UI\AudioRecorder.xaml.cs">
+      <DependentUpon>AudioRecorder.xaml</DependentUpon>
+    </Compile>
     <Compile Include="PhoneGap\JSON\JsonHelper.cs" />
     <Compile Include="PhoneGap\Commands\MimeTypeMapper.cs" />
     <Compile Include="PhoneGap\PhoneGapCommandCall.cs" />
@@ -89,6 +93,10 @@
   </ItemGroup>
   <ItemGroup>
     <Page Include="PGView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="PhoneGap\UI\AudioRecorder.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

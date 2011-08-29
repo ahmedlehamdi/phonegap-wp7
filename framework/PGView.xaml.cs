@@ -41,16 +41,25 @@ namespace WP7GapClassLib
             //Type t = Type.GetType("WP7GapClassLib.PhoneGap.Commands.Camera");
         }
 
+        /// <summary>
+        /// Indicates whether web control has been loaded and no additional initialization is needed.
+        /// Prevents data clearing during page transitions.
+        /// </summary>
+        private bool IsBrowserInitialized = false;
+
         void GapBrowser_Loaded(object sender, RoutedEventArgs e)
         {
             if (DesignerProperties.IsInDesignTool)
             {
                 return;
             }
+
+            // prevents data clearing during page transitions.
+            if (this.IsBrowserInitialized) return;
+
+            
             try
             {
-                Thread.Sleep(1000);
-
                 StreamResourceInfo streamInfo = Application.GetResourceStream(new Uri("GapSourceDictionary.xml", UriKind.Relative));
 
                 if (streamInfo != null)
@@ -116,6 +125,8 @@ namespace WP7GapClassLib
                 string str = reader.ReadToEnd();
 
                 this.GapBrowser.NavigateToString(str);
+
+                this.IsBrowserInitialized = true;
 
 
                 /*
